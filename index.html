@@ -38,6 +38,7 @@
 
     <div style="margin-top:12px">
       <button id="showLiffBtn">顯示 LIFF 資訊 (開發用)</button>
+      <button id="debugBtn" style="margin-left:8px">Debug: 取得 idToken & 詳細錯誤</button>
     </div>
   </div>
 
@@ -75,9 +76,21 @@
             var u = document.createElement('input'); u.type='hidden'; u.id='liffUserId'; u.value=profile.userId; document.getElementById('seatBindingForm').appendChild(u);
             var n = document.createElement('input'); n.type='hidden'; n.id='liffDisplayName'; n.value=profile.displayName; document.getElementById('seatBindingForm').appendChild(n);
           }).catch(function(err){
-            document.getElementById('debugProfile').style.display='block';
-            document.getElementById('debugProfile').textContent = 'liff.getProfile error: ' + String(err);
-            fetch(EXEC_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action:'logLiffInit', getProfileError:String(err), clientTs:Date.now() }) }).catch(function(e){ console.log('post error report failed', e); });
+            // show detailed error object
+            try {
+              var dbg = document.getElementById('debugProfile');
+              dbg.style.display = 'block';
+              var errObj = {
+                message: err && err.message ? err.message : String(err),
+                name: err && err.name ? err.name : (err && err.toString ? err.toString() : ''),
+                stack: err && err.stack ? err.stack : null
+              };
+              dbg.textContent = 'liff.getProfile error (detailed):\n' + JSON.stringify(errObj, null, 2);
+            } catch (e2) {
+              console.log('failed to render error', e2);
+            }
+            // send to server for logs
+            fetch(EXEC_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action:'logLiffInit', getProfileError: (err && err.message) ? err.message : String(err), getProfileFull: errObj || String(err), clientTs:Date.now() }) }).catch(function(e){ console.log('post error report failed', e); });
           });
         }
       }).catch(function(e){ console.log('liff.init error', e); });
@@ -99,6 +112,27 @@
 
     document.getElementById('showLiffBtn').addEventListener('click', function(){
       alert('liffUserId:' + (document.getElementById('liffUserId')?document.getElementById('liffUserId').value:'') + '\n' + 'liffDisplayName:' + (document.getElementById('liffDisplayName')?document.getElementById('liffDisplayName').value:''));
+    });
+
+    document.getElementById('debugBtn').addEventListener('click', function(){
+      // attempt to get idToken and show detailed profile/error
+      Promise.resolve().then(function(){
+        return liff.getIDToken().then(function(idt){
+          var s = 'idToken:\n' + (idt || 'empty');
+          try { alert(s); } catch(e) { console.log(s); }
+        }).catch(function(e){
+          alert('getIDToken error: ' + (e && e.message ? e.message : String(e)));
+        });
+      }).then(function(){
+        return liff.getProfile().then(function(profile){
+          var dbg = document.getElementById('debugProfile'); dbg.style.display='block'; dbg.textContent = 'Profile (debug button):\n' + JSON.stringify(profile, null, 2);
+        }).catch(function(err){
+          var dbg = document.getElementById('debugProfile'); dbg.style.display='block';
+          var errObj = { message: err && err.message ? err.message : String(err), name: err && err.name ? err.name : '', stack: err && err.stack ? err.stack : null };
+          dbg.textContent = 'liff.getProfile error (from debug button):\n' + JSON.stringify(errObj, null, 2);
+          alert('liff.getProfile error:\n' + (err && err.message ? err.message : String(err)));
+        });
+      }).catch(function(e){ console.log('debugBtn overall error', e); });
     });
   </script>
 </body>
