@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>座號綁定（靜態）</title>
+  <style>
+    body { font-family: 'Microsoft JhengHei',sans-serif; max-width:600px; margin:0 auto; padding:20px; background:#f5f5f5 }
+    .container { background:#fff; padding:20px; border-radius:8px }
+    pre { background:#f1f1f1; padding:10px; border-radius:6px; overflow:auto }
+    label { display:block; margin-top:12px }
+  </style>
+  <!-- 配置：把下面的 EXEC_URL 改成你的 Apps Script exec URL，例如 https://script.google.com/macros/s/AKfy.../exec -->
+  <script>
+    const EXEC_URL = 'https://script.google.com/macros/s/AKfycbzQ1q2sKLIjRRlKCTUCubycSMbg_gw6ZpHG3muTOZx_KwZ_JsK6sTj0qe7njLhowuUh9A/exec';
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1>座號綁定（靜態）</h1>
+    <div id="pageInfo" style="background:#e8f4ff; border:1px solid #b6e0ff; padding:8px; border-radius:4px; margin-bottom:12px; color:#084b8a; font-size:13px;">Loading page info...</div>
+    <div id="liffStatus" style="padding:8px; background:#fff8e1; border:1px solid #ffe082; border-radius:4px; margin-bottom:12px; display:none; color:#8a6d3b;">LIFF 狀態：<span id="liffStatusText">初始化中...</span></div>
+    <pre id="debugProfile" style="display:none;"></pre>
+
+    <form id="seatBindingForm">
+      <label for="seatNumber">學生座號</label>
+      <select id="seatNumber"><option value="">請選擇座號</option></select>
+      <label for="studentName">學生姓名</label>
+      <input id="studentName" />
+      <label for="parentName">家長姓名</label>
+      <input id="parentName" />
+      <label for="parentEmail">家長 Email</label>
+      <input id="parentEmail" />
+      <label for="parentPhone">家長手機</label>
+      <input id="parentPhone" />
+      <div style="margin-top:12px"><button id="submitBtn" type="button">提交綁定</button></div>
+    </form>
+
+    <div style="margin-top:12px">
+      <button id="showLiffBtn">顯示 LIFF 資訊 (開發用)</button>
+    </div>
+  </div>
+
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    // page info
+    document.addEventListener('DOMContentLoaded', function(){
+      var pi = document.getElementById('pageInfo');
+      var out = [];
+      out.push('PAGE_MARKER=SEATBINDING_PAGE_LOADED');
+      out.push('href=' + window.location.href);
+      out.push('referrer=' + document.referrer);
+      out.push('ua=' + (navigator.userAgent||''));
+      pi.textContent = out.join('\n');
+    });
+
+    (function(){
+      var LIFF_ID = '2008280587-XzrRkkO4';
+      liff.init({ liffId: LIFF_ID }).then(function(){
+        var inClient = liff.isInClient()?true:false;
+        var loggedIn = liff.isLoggedIn()?true:false;
+        document.getElementById('liffStatus').style.display = 'block';
+        document.getElementById('liffStatusText').textContent = 'inClient=' + inClient + ' isLoggedIn=' + loggedIn;
+
+        if (inClient || loggedIn) {
+          liff.getProfile().then(function(profile){
+            document.getElementById('debugProfile').style.display='block';
+            document.getElementById('debugProfile').textContent = JSON.stringify(profile, null, 2);
+            // send to server (use configured EXEC_URL)
+            fetch(EXEC_URL, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action:'logLiffInit', gotProfile:true, profile:profile, clientTs:Date.now() })
+            }).catch(function(e){ console.log('post logLiffInit failed', e); });
+            // populate hidden fields
+            var u = document.createElement('input'); u.type='hidden'; u.id='liffUserId'; u.value=profile.userId; document.getElementById('seatBindingForm').appendChild(u);
+            var n = document.createElement('input'); n.type='hidden'; n.id='liffDisplayName'; n.value=profile.displayName; document.getElementById('seatBindingForm').appendChild(n);
+          }).catch(function(err){
+            document.getElementById('debugProfile').style.display='block';
+            document.getElementById('debugProfile').textContent = 'liff.getProfile error: ' + String(err);
+            fetch(EXEC_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action:'logLiffInit', getProfileError:String(err), clientTs:Date.now() }) }).catch(function(e){ console.log('post error report failed', e); });
+          });
+        }
+      }).catch(function(e){ console.log('liff.init error', e); });
+    })();
+
+    document.getElementById('submitBtn').addEventListener('click', function(){
+      var payload = {
+        action:'submitSeatBinding',
+        seatNumber:document.getElementById('seatNumber').value,
+        studentName:document.getElementById('studentName').value,
+        parentName:document.getElementById('parentName').value,
+        parentEmail:document.getElementById('parentEmail').value,
+        parentPhone:document.getElementById('parentPhone').value,
+        liffUserId: (document.getElementById('liffUserId')?document.getElementById('liffUserId').value:''),
+        liffDisplayName: (document.getElementById('liffDisplayName')?document.getElementById('liffDisplayName').value:'')
+      };
+      fetch(EXEC_URL, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) }).then(function(r){ return r.json(); }).then(function(js){ alert('提交結果: ' + JSON.stringify(js)); }).catch(function(e){ alert('提交失敗: ' + e); });
+    });
+
+    document.getElementById('showLiffBtn').addEventListener('click', function(){
+      alert('liffUserId:' + (document.getElementById('liffUserId')?document.getElementById('liffUserId').value:'') + '\n' + 'liffDisplayName:' + (document.getElementById('liffDisplayName')?document.getElementById('liffDisplayName').value:''));
+    });
+  </script>
+</body>
+</html>
