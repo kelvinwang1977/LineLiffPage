@@ -41,9 +41,18 @@
         <input id="parentPhone" />
 
         <label for="relation">關係</label>
-        <input id="relation" />
+        <select id="relation">
+          <option value="">請選擇關係</option>
+          <option value="父親">父親</option>
+          <option value="母親">母親</option>
+          <option value="監護人">監護人</option>
+          <option value="阿公/阿嬤">阿公/阿嬤</option>
+          <option value="其他">其他</option>
+        </select>
 
         <div style="margin-top:12px"><button id="submitBtn" type="button">送出綁定</button></div>
+        <div id="result" style="margin-top:12px; padding:10px; border-radius:6px; display:none;
+          background:#f0f8f4; color:#064; border:1px solid #cfe9df"></div>
       </form>
 
       
@@ -90,18 +99,49 @@
     })();
 
     document.getElementById('submitBtn').addEventListener('click', function(){
+      var submitBtn = document.getElementById('submitBtn');
+      var seatNumber = document.getElementById('seatNumber').value;
+      var parentName = document.getElementById('parentName').value;
+      if (!seatNumber) { alert('請先選擇學生座號'); return; }
+      if (!parentName) { alert('請輸入家長姓名'); return; }
+
+      var liffUserIdEl = document.getElementById('liffUserId');
+      var liffDisplayNameEl = document.getElementById('liffDisplayName');
+      var liffUserId = liffUserIdEl ? liffUserIdEl.value : '';
+      var liffDisplayName = liffDisplayNameEl ? liffDisplayNameEl.value : '';
+
       var payload = {
-        action:'submitSeatBinding',
-        seatNumber:document.getElementById('seatNumber').value,
-        studentName:document.getElementById('studentName').value,
-        parentName:document.getElementById('parentName').value,
-        parentEmail:document.getElementById('parentEmail').value,
-        parentPhone:document.getElementById('parentPhone').value,
-        relation:document.getElementById('relation')?document.getElementById('relation').value:'',
-        liffUserId: (document.getElementById('liffUserId')?document.getElementById('liffUserId').value:''),
-        liffDisplayName: (document.getElementById('liffDisplayName')?document.getElementById('liffDisplayName').value:'')
+        action: 'submitSeatBinding',
+        seatNumber: seatNumber,
+        seat: seatNumber,
+        parentName: parentName,
+        parentEmail: document.getElementById('parentEmail').value,
+        parentPhone: document.getElementById('parentPhone').value,
+        relation: document.getElementById('relation')?document.getElementById('relation').value:'',
+        liffUserId: liffUserId,
+        liffDisplayName: liffDisplayName,
+        fromLiff: !!liffUserId
       };
-      fetch(EXEC_URL, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) }).then(function(r){ return r.json(); }).then(function(js){ alert('提交結果: ' + JSON.stringify(js)); }).catch(function(e){ alert('提交失敗: ' + e); });
+
+      // disable button to prevent double submit
+      submitBtn.disabled = true;
+      var resultEl = document.getElementById('result');
+      resultEl.style.display = 'none';
+
+      fetch(EXEC_URL, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) })
+        .then(function(r){ return r.json(); })
+        .then(function(js){
+          resultEl.style.display = 'block';
+          resultEl.textContent = '提交結果：' + JSON.stringify(js);
+          submitBtn.disabled = false;
+          // scroll into view
+          resultEl.scrollIntoView({ behavior: 'smooth' });
+        }).catch(function(e){
+          resultEl.style.display = 'block';
+          resultEl.textContent = '提交失敗：' + (e && e.message ? e.message : String(e));
+          submitBtn.disabled = false;
+          resultEl.scrollIntoView({ behavior: 'smooth' });
+        });
     });
 
     
