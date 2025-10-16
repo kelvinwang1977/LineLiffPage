@@ -23,7 +23,7 @@
   <div class="welcome" id="pageInfo">嗨，朋友（ID: N/A） ，歡迎來到座號綁定頁面！
       <div style="margin-top:6px; color:#666; font-size:13px">請選擇學生座號，系統會自動帶出學生姓名；填寫家長資料後送出即可完成綁定。</div>
   </div>
-      <pre id="debugProfile" style="display:none;"></pre>
+  <pre id="debugProfile" style="display:none;visibility:hidden;height:0;margin:0;padding:0;overflow:hidden"></pre>
 
       <form id="seatBindingForm">
         <label for="seatNumber">學生座號</label>
@@ -131,16 +131,18 @@
           if (inClient || loggedIn) {
             try{
               var profile = await liff.getProfile();
-              document.getElementById('debugProfile').style.display='block';
-              document.getElementById('debugProfile').textContent = JSON.stringify(profile, null, 2);
+              // do not display full profile JSON or userId on the page for privacy
+              // keep debugProfile hidden; still send a minimal server log
               // send to server log (fire and forget)
               fetch(EXEC, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action:'logLiffInit', gotProfile:true, profile:profile, clientTs:Date.now() }) }).catch(function(e){});
               // populate fields
               var u = document.createElement('input'); u.type='hidden'; u.id='liffUserId'; u.value=profile.userId; document.getElementById('seatBindingForm').appendChild(u);
               var n = document.createElement('input'); n.type='hidden'; n.id='liffDisplayName'; n.value=profile.displayName; document.getElementById('seatBindingForm').appendChild(n);
-              document.getElementById('pageInfo').innerHTML = '嗨，' + (profile.displayName||'朋友') + '（ID: ' + (profile.userId||'N/A') + '） ，歡迎來到座號綁定頁面！' + '<div style="margin-top:6px; color:#666; font-size:13px">請選擇學生座號，系統會自動帶出學生姓名；填寫家長資料後送出即可完成綁定。</div>';
+              // show only displayName (no userId)
+              document.getElementById('pageInfo').innerHTML = '嗨，' + (profile.displayName||'朋友') + '，歡迎來到座號綁定頁面！' + '<div style="margin-top:6px; color:#666; font-size:13px">請選擇學生座號，系統會自動帶出學生姓名；填寫家長資料後送出即可完成綁定。</div>';
             } catch(err){
-              var dbg = document.getElementById('debugProfile'); dbg.style.display='block'; dbg.textContent = 'liff.getProfile error:\n' + (err && err.message ? err.message : String(err));
+              // keep profile errors hidden from UI; log to server for debugging
+              var dbg = document.getElementById('debugProfile'); dbg.style.visibility='hidden'; dbg.textContent = 'liff.getProfile error:\n' + (err && err.message ? err.message : String(err));
               fetch(EXEC, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action:'logLiffInit', getProfileError: (err && err.message) ? err.message : String(err), clientTs:Date.now() }) }).catch(function(e){});
             }
           }
@@ -149,13 +151,29 @@
 
     })();
 
-    // submit handler (unchanged behavior)
-    document.getElementById('submitBtn').addEventListener('click', function(){
+    // submit handler with pre-submit ping to server
+    document.getElementById('submitBtn').addEventListener('click', async function(){
       var submitBtn = document.getElementById('submitBtn');
       var seatNumber = document.getElementById('seatNumber').value;
       var parentName = document.getElementById('parentName').value;
+      var resultEl = document.getElementById('result');
       if (!seatNumber) { alert('請先選擇學生座號'); return; }
       if (!parentName) { alert('請輸入家長姓名'); return; }
+
+      // ping server with a quick GET to ensure endpoint reachable before POST
+      try{
+        resultEl.style.display = 'block'; resultEl.textContent = '檢查伺服器連線中...';
+        const pingResp = await fetch(EXEC + '?action=getStudentList&_=' + Date.now(), { method:'GET', cache:'no-store' });
+        if (!pingResp.ok) {
+          resultEl.textContent = '伺服器回應異常，無法送出（HTTP ' + pingResp.status + '）';
+          return;
+        }
+        // optionally parse to ensure JSON
+        try { await pingResp.clone().json(); } catch(e) { resultEl.textContent = '伺服器回傳非 JSON，無法送出'; return; }
+      } catch(pingErr) {
+        resultEl.style.display = 'block'; resultEl.textContent = '無法連線到後端：' + (pingErr && pingErr.message ? pingErr.message : String(pingErr));
+        return;
+      }
 
       var liffUserIdEl = document.getElementById('liffUserId');
       var liffDisplayNameEl = document.getElementById('liffDisplayName');
@@ -177,26 +195,23 @@
 
       // disable button to prevent double submit
       submitBtn.disabled = true;
-      var resultEl = document.getElementById('result');
       resultEl.style.display = 'none';
 
       // use form-encoded body to avoid CORS preflight (some hosts block OPTIONS)
       var formBody = new URLSearchParams();
       Object.keys(payload).forEach(function(k){ formBody.append(k, String(payload[k] === undefined ? '' : payload[k])); });
-      fetch(EXEC, { method:'POST', headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body: formBody.toString() })
-        .then(function(r){ return r.json(); })
-        .then(function(js){
-          resultEl.style.display = 'block';
-          resultEl.textContent = '提交結果：' + JSON.stringify(js);
-          submitBtn.disabled = false;
-          // scroll into view
-          resultEl.scrollIntoView({ behavior: 'smooth' });
-        }).catch(function(e){
-          resultEl.style.display = 'block';
-          resultEl.textContent = '提交失敗：' + (e && e.message ? e.message : String(e));
-          submitBtn.disabled = false;
-          resultEl.scrollIntoView({ behavior: 'smooth' });
-        });
+      try{
+        const r = await fetch(EXEC, { method:'POST', headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body: formBody.toString() });
+        const js = await r.json();
+        resultEl.style.display = 'block';
+        resultEl.textContent = '提交結果：' + JSON.stringify(js);
+      } catch(e){
+        resultEl.style.display = 'block';
+        resultEl.textContent = '提交失敗：' + (e && e.message ? e.message : String(e));
+      } finally {
+        submitBtn.disabled = false;
+        resultEl.scrollIntoView({ behavior: 'smooth' });
+      }
     });
 
   })();
