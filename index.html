@@ -295,16 +295,7 @@
       }
     });
 
-    // local fill button for debugging rendering issues in LINE in-app browser
-    var localBtn = document.getElementById('localFillBtn');
-    if (localBtn) localBtn.addEventListener('click', function(){
-      var sel = document.getElementById('seatNumber');
-      // clear existing options except first
-      while (sel.options.length>1) sel.remove(1);
-      var demo = ['1','2','3','A1','B2'];
-      demo.forEach(function(s){ var o = document.createElement('option'); o.value = s; o.text = s; sel.appendChild(o); });
-      sel.style.display = ''; sel.disabled = false; document.getElementById('seatLoadStatus').textContent = '已載入本機測試座號'; setTimeout(function(){ document.getElementById('seatLoadStatus').style.display='none'; }, 1200);
-    });
+    
 
   })();
   </script>
