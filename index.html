@@ -128,7 +128,10 @@
       var resultEl = document.getElementById('result');
       resultEl.style.display = 'none';
 
-      fetch(EXEC_URL, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) })
+      // use form-encoded body to avoid CORS preflight (some hosts block OPTIONS)
+      var formBody = new URLSearchParams();
+      Object.keys(payload).forEach(function(k){ formBody.append(k, String(payload[k] === undefined ? '' : payload[k])); });
+      fetch(EXEC_URL, { method:'POST', headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body: formBody.toString() })
         .then(function(r){ return r.json(); })
         .then(function(js){
           resultEl.style.display = 'block';
