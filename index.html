@@ -165,7 +165,9 @@
         resultEl.style.display = 'block'; resultEl.textContent = '檢查伺服器連線中...';
         const pingResp = await fetch(EXEC + '?action=getStudentList&_=' + Date.now(), { method:'GET', cache:'no-store' });
         if (!pingResp.ok) {
-          resultEl.textContent = '伺服器回應異常，無法送出（HTTP ' + pingResp.status + '）';
+          var text = '';
+          try { text = await pingResp.text(); } catch(e){ text = '(讀取 body 失敗)'; }
+          resultEl.textContent = '伺服器回應異常，無法送出（HTTP ' + pingResp.status + '）\n' + (text ? text.substring(0,1000) : '');
           return;
         }
         // optionally parse to ensure JSON
