@@ -208,8 +208,25 @@
         resultEl.style.display = 'block';
         resultEl.textContent = '提交結果：' + JSON.stringify(js);
       } catch(e){
-        resultEl.style.display = 'block';
-        resultEl.textContent = '提交失敗：' + (e && e.message ? e.message : String(e));
+        // fetch failed (often CORS). Attempt iframe form POST fallback (will not read response)
+        try {
+          // create hidden iframe
+          var iframeName = 'hidden_post_iframe_' + Date.now();
+          var iframe = document.createElement('iframe'); iframe.name = iframeName; iframe.style.display = 'none'; document.body.appendChild(iframe);
+          // build form
+          var f = document.createElement('form');
+          f.method = 'POST'; f.action = EXEC; f.target = iframeName; f.enctype = 'application/x-www-form-urlencoded';
+          Object.keys(payload).forEach(function(k){ var inp = document.createElement('input'); inp.type = 'hidden'; inp.name = k; inp.value = String(payload[k] === undefined ? '' : payload[k]); f.appendChild(inp); });
+          document.body.appendChild(f);
+          f.submit();
+          resultEl.style.display = 'block';
+          resultEl.textContent = '提交失敗（fetch），已改用備援表單提交。若短時間內仍未看到資料，請檢查 Web App 部署設定。';
+          // cleanup after a while
+          setTimeout(function(){ try{ document.body.removeChild(iframe); document.body.removeChild(f); } catch(er){} }, 15000);
+        } catch(fb){
+          resultEl.style.display = 'block';
+          resultEl.textContent = '提交失敗（fetch 和備援皆失敗）：' + (e && e.message ? e.message : String(e));
+        }
       } finally {
         submitBtn.disabled = false;
         resultEl.scrollIntoView({ behavior: 'smooth' });
