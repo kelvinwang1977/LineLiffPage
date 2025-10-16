@@ -25,10 +25,11 @@
   </div>
   <pre id="debugProfile" style="display:none;visibility:hidden;height:0;margin:0;padding:0;overflow:hidden"></pre>
 
-      <form id="seatBindingForm">
+    <form id="seatBindingForm">
   <label for="seatNumber">學生座號</label>
   <select id="seatNumber"><option value="">請選擇座號</option></select>
   <div id="seatLoadStatus" style="margin-top:8px;font-size:13px;color:#666;display:none"></div>
+  <div style="margin-top:8px"><button id="localFillBtn" type="button" style="background:#666">載入本機測試座號</button></div>
 
   <!-- 學生姓名由後端根據座號查回，前端不顯示此欄位 -->
 
@@ -293,6 +294,17 @@
         submitBtn.disabled = false;
         resultEl.scrollIntoView({ behavior: 'smooth' });
       }
+    });
+
+    // local fill button for debugging rendering issues in LINE in-app browser
+    var localBtn = document.getElementById('localFillBtn');
+    if (localBtn) localBtn.addEventListener('click', function(){
+      var sel = document.getElementById('seatNumber');
+      // clear existing options except first
+      while (sel.options.length>1) sel.remove(1);
+      var demo = ['1','2','3','A1','B2'];
+      demo.forEach(function(s){ var o = document.createElement('option'); o.value = s; o.text = s; sel.appendChild(o); });
+      sel.style.display = ''; sel.disabled = false; document.getElementById('seatLoadStatus').textContent = '已載入本機測試座號'; setTimeout(function(){ document.getElementById('seatLoadStatus').style.display='none'; }, 1200);
     });
 
   })();
