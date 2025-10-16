@@ -27,8 +27,7 @@
         <label for="seatNumber">學生座號</label>
         <select id="seatNumber"><option value="">請選擇座號</option></select>
 
-        <label for="studentName">學生姓名</label>
-        <input id="studentName" />
+  <!-- 學生姓名由後端根據座號查回，前端不顯示此欄位 -->
 
         <label for="parentName">家長姓名</label>
         <input id="parentName" />
@@ -51,7 +50,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script>
 
-    (function(){
+  (function(){
       var LIFF_ID = '2008280587-XzrRkkO4';
       liff.init({ liffId: LIFF_ID }).then(function(){
         var inClient = liff.isInClient()?true:false;
@@ -73,6 +72,17 @@
             fetch(EXEC_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action:'logLiffInit', getProfileError: (err && err.message) ? err.message : String(err), clientTs:Date.now() }) }).catch(function(e){ console.log('post error report failed', e); });
           });
         }
+
+        // 另外，載入學生座號清單供選擇（來自 Apps Script GET API）
+        fetch(EXEC_URL + '?action=getStudentList').then(function(r){ return r.json(); }).then(function(js){
+          if (js && js.success && js.data) {
+            var sel = document.getElementById('seatNumber');
+            js.data.sort(function(a,b){ return Number(a.seat) - Number(b.seat); });
+            js.data.forEach(function(it){
+              var opt = document.createElement('option'); opt.value = it.seat; opt.textContent = it.seat + ' - ' + it.name; sel.appendChild(opt);
+            });
+          }
+        }).catch(function(e){ console.log('getStudentList failed', e); });
       }).catch(function(e){ console.log('liff.init error', e); });
     })();
 
