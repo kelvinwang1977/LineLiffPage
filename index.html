@@ -55,9 +55,7 @@
       var LIFF_ID = '2008280587-XzrRkkO4';
       liff.init({ liffId: LIFF_ID }).then(function(){
         var inClient = liff.isInClient()?true:false;
-        var loggedIn = liff.isLoggedIn()?true:false;
-        document.getElementById('liffStatus').style.display = 'block';
-        document.getElementById('liffStatusText').textContent = 'inClient=' + inClient + ' isLoggedIn=' + loggedIn;
+          var loggedIn = liff.isLoggedIn()?true:false;
 
         if (inClient || loggedIn) {
           liff.getProfile().then(function(profile){
@@ -93,30 +91,7 @@
       fetch(EXEC_URL, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) }).then(function(r){ return r.json(); }).then(function(js){ alert('提交結果: ' + JSON.stringify(js)); }).catch(function(e){ alert('提交失敗: ' + e); });
     });
 
-    document.getElementById('showLiffBtn').addEventListener('click', function(){
-      alert('liffUserId:' + (document.getElementById('liffUserId')?document.getElementById('liffUserId').value:'') + '\n' + 'liffDisplayName:' + (document.getElementById('liffDisplayName')?document.getElementById('liffDisplayName').value:''));
-    });
-
-    document.getElementById('debugBtn').addEventListener('click', function(){
-      // attempt to get idToken and show detailed profile/error
-      Promise.resolve().then(function(){
-        return liff.getIDToken().then(function(idt){
-          var s = 'idToken:\n' + (idt || 'empty');
-          try { alert(s); } catch(e) { console.log(s); }
-        }).catch(function(e){
-          alert('getIDToken error: ' + (e && e.message ? e.message : String(e)));
-        });
-      }).then(function(){
-        return liff.getProfile().then(function(profile){
-          var dbg = document.getElementById('debugProfile'); dbg.style.display='block'; dbg.textContent = 'Profile (debug button):\n' + JSON.stringify(profile, null, 2);
-        }).catch(function(err){
-          var dbg = document.getElementById('debugProfile'); dbg.style.display='block';
-          var errObj = { message: err && err.message ? err.message : String(err), name: err && err.name ? err.name : '', stack: err && err.stack ? err.stack : null };
-          dbg.textContent = 'liff.getProfile error (from debug button):\n' + JSON.stringify(errObj, null, 2);
-          alert('liff.getProfile error:\n' + (err && err.message ? err.message : String(err)));
-        });
-      }).catch(function(e){ console.log('debugBtn overall error', e); });
-    });
+    
   </script>
 </body>
 </html>
