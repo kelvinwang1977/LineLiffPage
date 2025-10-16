@@ -58,46 +58,98 @@
       
   </div>
 
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-    <script>
-
+  <script>
   (function(){
-      var LIFF_ID = '2008280587-XzrRkkO4';
-      liff.init({ liffId: LIFF_ID }).then(function(){
-        var inClient = liff.isInClient()?true:false;
+    const VERSION_URL = './version.txt';
+    const LIFF_ID = '2008280587-XzrRkkO4';
+    const EXEC = typeof EXEC_URL !== 'undefined' ? EXEC_URL : '';
+
+    // insert update banner
+    var banner = document.createElement('div');
+    banner.id = 'updateBanner';
+    banner.style.cssText = 'display:none;position:fixed;left:0;right:0;top:0;z-index:9999;padding:10px;background:#fffbe6;border-bottom:1px solid #ffd966;text-align:center';
+    banner.innerHTML = '偵測到新版本可用，請 <button id="reloadBtn" style="margin-left:8px;padding:6px 8px;border-radius:4px">重新整理</button>';
+    document.body.insertBefore(banner, document.body.firstChild);
+    document.addEventListener('click', function(e){ if(e.target && e.target.id==='reloadBtn'){ location.reload(true); } });
+
+    async function fetchVersion(){
+      try{
+        const res = await fetch(VERSION_URL + '?_=' + Date.now(), {cache: 'no-store'});
+        if (!res.ok) return null;
+        return (await res.text()).trim();
+      } catch(e){ return null; }
+    }
+
+    // dynamic load LIFF SDK with cache-busting
+    function loadLiffSdk(ver){
+      return new Promise(function(resolve,reject){
+        if (window.liff) return resolve();
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js' + (ver ? '?cb=' + encodeURIComponent(ver) : '?_=' + Date.now());
+        s.onload = function(){ resolve(); };
+        s.onerror = function(){ reject(new Error('LIFF SDK load failed')); };
+        document.head.appendChild(s);
+      });
+    }
+
+    (async function main(){
+      const currentVer = await fetchVersion();
+      try { if (currentVer) localStorage.setItem('app_build_version', currentVer); } catch(e){}
+
+      // poll for version changes every 20s
+      setInterval(async function(){
+        const v = await fetchVersion();
+        const stored = localStorage.getItem('app_build_version') || '';
+        if (v && stored && v !== stored) {
+          document.getElementById('updateBanner').style.display = 'block';
+        }
+      }, 20000);
+
+      // always load student list (independent of LIFF)
+      try{
+        const r = await fetch(EXEC + '?action=getStudentList&_=' + Date.now());
+        const js = await r.json();
+        if (js && js.success && js.data) {
+          var sel = document.getElementById('seatNumber');
+          js.data.sort(function(a,b){ return Number(a.seat) - Number(b.seat); });
+          js.data.forEach(function(it){ var opt = document.createElement('option'); opt.value = it.seat; opt.textContent = it.seat; sel.appendChild(opt); });
+        }
+      } catch(e){ console.log('getStudentList failed', e); }
+
+      // attempt to load LIFF SDK and init
+      try{
+        await loadLiffSdk(currentVer || Date.now());
+        if (window.liff) {
+          try{
+            await liff.init({ liffId: LIFF_ID });
+          } catch(e){ console.log('liff.init error', e); }
+
+          var inClient = liff.isInClient()?true:false;
           var loggedIn = liff.isLoggedIn()?true:false;
 
-        if (inClient || loggedIn) {
-          liff.getProfile().then(function(profile){
-            document.getElementById('debugProfile').style.display='block';
-            document.getElementById('debugProfile').textContent = JSON.stringify(profile, null, 2);
-            // send to server log
-            fetch(EXEC_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action:'logLiffInit', gotProfile:true, profile:profile, clientTs:Date.now() }) }).catch(function(e){ console.log('post logLiffInit failed', e); });
-            // populate fields
-            var u = document.createElement('input'); u.type='hidden'; u.id='liffUserId'; u.value=profile.userId; document.getElementById('seatBindingForm').appendChild(u);
-            var n = document.createElement('input'); n.type='hidden'; n.id='liffDisplayName'; n.value=profile.displayName; document.getElementById('seatBindingForm').appendChild(n);
-            // also show in pageInfo using requested wording
-            document.getElementById('pageInfo').innerHTML = '嗨，' + (profile.displayName||'朋友') + '（ID: ' + (profile.userId||'N/A') + '） ，歡迎來到座號綁定頁面！' +
-              '<div style="margin-top:6px; color:#666; font-size:13px">請選擇學生座號，系統會自動帶出學生姓名；填寫家長資料後送出即可完成綁定。</div>';
-          }).catch(function(err){
-            var dbg = document.getElementById('debugProfile'); dbg.style.display='block'; dbg.textContent = 'liff.getProfile error:\n' + (err && err.message ? err.message : String(err));
-            fetch(EXEC_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action:'logLiffInit', getProfileError: (err && err.message) ? err.message : String(err), clientTs:Date.now() }) }).catch(function(e){ console.log('post error report failed', e); });
-          });
-        }
-
-        // 另外，載入學生座號清單供選擇（來自 Apps Script GET API）
-        fetch(EXEC_URL + '?action=getStudentList').then(function(r){ return r.json(); }).then(function(js){
-          if (js && js.success && js.data) {
-            var sel = document.getElementById('seatNumber');
-            js.data.sort(function(a,b){ return Number(a.seat) - Number(b.seat); });
-            js.data.forEach(function(it){
-              var opt = document.createElement('option'); opt.value = it.seat; opt.textContent = it.seat; sel.appendChild(opt);
-            });
+          if (inClient || loggedIn) {
+            try{
+              var profile = await liff.getProfile();
+              document.getElementById('debugProfile').style.display='block';
+              document.getElementById('debugProfile').textContent = JSON.stringify(profile, null, 2);
+              // send to server log (fire and forget)
+              fetch(EXEC, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action:'logLiffInit', gotProfile:true, profile:profile, clientTs:Date.now() }) }).catch(function(e){});
+              // populate fields
+              var u = document.createElement('input'); u.type='hidden'; u.id='liffUserId'; u.value=profile.userId; document.getElementById('seatBindingForm').appendChild(u);
+              var n = document.createElement('input'); n.type='hidden'; n.id='liffDisplayName'; n.value=profile.displayName; document.getElementById('seatBindingForm').appendChild(n);
+              document.getElementById('pageInfo').innerHTML = '嗨，' + (profile.displayName||'朋友') + '（ID: ' + (profile.userId||'N/A') + '） ，歡迎來到座號綁定頁面！' + '<div style="margin-top:6px; color:#666; font-size:13px">請選擇學生座號，系統會自動帶出學生姓名；填寫家長資料後送出即可完成綁定。</div>';
+            } catch(err){
+              var dbg = document.getElementById('debugProfile'); dbg.style.display='block'; dbg.textContent = 'liff.getProfile error:\n' + (err && err.message ? err.message : String(err));
+              fetch(EXEC, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action:'logLiffInit', getProfileError: (err && err.message) ? err.message : String(err), clientTs:Date.now() }) }).catch(function(e){});
+            }
           }
-        }).catch(function(e){ console.log('getStudentList failed', e); });
-      }).catch(function(e){ console.log('liff.init error', e); });
+        }
+      } catch(err){ console.log('liff load/init error', err); }
+
     })();
 
+    // submit handler (unchanged behavior)
     document.getElementById('submitBtn').addEventListener('click', function(){
       var submitBtn = document.getElementById('submitBtn');
       var seatNumber = document.getElementById('seatNumber').value;
@@ -131,7 +183,7 @@
       // use form-encoded body to avoid CORS preflight (some hosts block OPTIONS)
       var formBody = new URLSearchParams();
       Object.keys(payload).forEach(function(k){ formBody.append(k, String(payload[k] === undefined ? '' : payload[k])); });
-      fetch(EXEC_URL, { method:'POST', headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body: formBody.toString() })
+      fetch(EXEC, { method:'POST', headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body: formBody.toString() })
         .then(function(r){ return r.json(); })
         .then(function(js){
           resultEl.style.display = 'block';
@@ -147,7 +199,7 @@
         });
     });
 
-    
+  })();
   </script>
 </body>
 </html>
