@@ -91,7 +91,7 @@
             var sel = document.getElementById('seatNumber');
             js.data.sort(function(a,b){ return Number(a.seat) - Number(b.seat); });
             js.data.forEach(function(it){
-              var opt = document.createElement('option'); opt.value = it.seat; opt.textContent = it.seat + ' - ' + it.name; sel.appendChild(opt);
+              var opt = document.createElement('option'); opt.value = it.seat; opt.textContent = it.seat; sel.appendChild(opt);
             });
           }
         }).catch(function(e){ console.log('getStudentList failed', e); });
