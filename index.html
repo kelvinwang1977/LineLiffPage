@@ -20,7 +20,9 @@
 <body>
     <div class="container">
       <h1>座號綁定</h1>
-  <div class="welcome" id="pageInfo">Loading...</div>
+  <div class="welcome" id="pageInfo">嗨，朋友（ID: N/A） ，歡迎來到座號綁定頁面！
+      <div style="margin-top:6px; color:#666; font-size:13px">請選擇學生座號，系統會自動帶出學生姓名；填寫家長資料後送出即可完成綁定。</div>
+  </div>
       <pre id="debugProfile" style="display:none;"></pre>
 
       <form id="seatBindingForm">
@@ -65,8 +67,9 @@
             // populate fields
             var u = document.createElement('input'); u.type='hidden'; u.id='liffUserId'; u.value=profile.userId; document.getElementById('seatBindingForm').appendChild(u);
             var n = document.createElement('input'); n.type='hidden'; n.id='liffDisplayName'; n.value=profile.displayName; document.getElementById('seatBindingForm').appendChild(n);
-            // also show in pageInfo
-            document.getElementById('pageInfo').textContent = '歡迎，' + (profile.displayName||'') + '（ID:' + (profile.userId||'') + '）';
+            // also show in pageInfo using requested wording
+            document.getElementById('pageInfo').innerHTML = '嗨，' + (profile.displayName||'朋友') + '（ID: ' + (profile.userId||'N/A') + '） ，歡迎來到座號綁定頁面！' +
+              '<div style="margin-top:6px; color:#666; font-size:13px">請選擇學生座號，系統會自動帶出學生姓名；填寫家長資料後送出即可完成綁定。</div>';
           }).catch(function(err){
             var dbg = document.getElementById('debugProfile'); dbg.style.display='block'; dbg.textContent = 'liff.getProfile error:\n' + (err && err.message ? err.message : String(err));
             fetch(EXEC_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action:'logLiffInit', getProfileError: (err && err.message) ? err.message : String(err), clientTs:Date.now() }) }).catch(function(e){ console.log('post error report failed', e); });
