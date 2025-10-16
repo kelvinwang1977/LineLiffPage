@@ -106,30 +106,16 @@
         }
       }, 20000);
 
-      // always load student list (independent of LIFF) via JSONP to avoid CORS
+      // always load student list (independent of LIFF)
       try{
-        await new Promise(function(resolve, reject){
-          var cbName = 'gd_cb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
-          window[cbName] = function(resp){
-            try{
-              if (resp && resp.success && resp.data) {
-                var sel = document.getElementById('seatNumber');
-                resp.data.sort(function(a,b){ return Number(a.seat) - Number(b.seat); });
-                resp.data.forEach(function(it){ var opt = document.createElement('option'); opt.value = it.seat; opt.textContent = it.seat; sel.appendChild(opt); });
-                resolve();
-              } else {
-                resolve();
-              }
-            } catch(err){ resolve(); }
-            try{ delete window[cbName]; } catch(e){}
-          };
-          var s = document.createElement('script');
-          s.src = EXEC + '?action=getStudentList&callback=' + encodeURIComponent(cbName) + '&_=' + Date.now();
-          s.async = true;
-          s.onerror = function(e){ try{ delete window[cbName]; } catch(er){}; resolve(); };
-          document.head.appendChild(s);
-        });
-      } catch(e){ console.log('getStudentList JSONP failed', e); }
+        const r = await fetch(EXEC + '?action=getStudentList&_=' + Date.now());
+        const js = await r.json();
+        if (js && js.success && js.data) {
+          var sel = document.getElementById('seatNumber');
+          js.data.sort(function(a,b){ return Number(a.seat) - Number(b.seat); });
+          js.data.forEach(function(it){ var opt = document.createElement('option'); opt.value = it.seat; opt.textContent = it.seat; sel.appendChild(opt); });
+        }
+      } catch(e){ console.log('getStudentList failed', e); }
 
       // attempt to load LIFF SDK and init
       try{
@@ -174,26 +160,18 @@
       if (!seatNumber) { alert('請先選擇學生座號'); return; }
       if (!parentName) { alert('請輸入家長姓名'); return; }
 
-      // ping server with JSONP (no CORS) to ensure endpoint reachable before POST
+      // ping server with a quick GET to ensure endpoint reachable before POST
       try{
         resultEl.style.display = 'block'; resultEl.textContent = '檢查伺服器連線中...';
-        await new Promise(function(resolve, reject){
-          var cb = 'ping_cb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
-          window[cb] = function(resp){ try{ delete window[cb]; } catch(e){}; resolve(resp); };
-          var s = document.createElement('script');
-          s.src = EXEC + '?action=getStudentList&callback=' + encodeURIComponent(cb) + '&_=' + Date.now();
-          s.async = true;
-          s.onerror = function(ev){ try{ delete window[cb]; } catch(e){}; resolve(null); };
-          document.head.appendChild(s);
-        }).then(function(resp){
-          if (!resp) {
-            resultEl.textContent = '伺服器無回應或回傳錯誤（JSONP 載入失敗）';
-            throw new Error('ping failed');
-          }
-          // ok
-        });
+        const pingResp = await fetch(EXEC + '?action=getStudentList&_=' + Date.now(), { method:'GET', cache:'no-store' });
+        if (!pingResp.ok) {
+          resultEl.textContent = '伺服器回應異常，無法送出（HTTP ' + pingResp.status + '）';
+          return;
+        }
+        // optionally parse to ensure JSON
+        try { await pingResp.clone().json(); } catch(e) { resultEl.textContent = '伺服器回傳非 JSON，無法送出'; return; }
       } catch(pingErr) {
-        resultEl.style.display = 'block'; resultEl.textContent = '無法連線到後端（JSONP 失敗）：' + (pingErr && pingErr.message ? pingErr.message : String(pingErr));
+        resultEl.style.display = 'block'; resultEl.textContent = '無法連線到後端：' + (pingErr && pingErr.message ? pingErr.message : String(pingErr));
         return;
       }
 
@@ -228,25 +206,8 @@
         resultEl.style.display = 'block';
         resultEl.textContent = '提交結果：' + JSON.stringify(js);
       } catch(e){
-        // fetch failed (often CORS). Attempt iframe form POST fallback (will not read response)
-        try {
-          // create hidden iframe
-          var iframeName = 'hidden_post_iframe_' + Date.now();
-          var iframe = document.createElement('iframe'); iframe.name = iframeName; iframe.style.display = 'none'; document.body.appendChild(iframe);
-          // build form
-          var f = document.createElement('form');
-          f.method = 'POST'; f.action = EXEC; f.target = iframeName; f.enctype = 'application/x-www-form-urlencoded';
-          Object.keys(payload).forEach(function(k){ var inp = document.createElement('input'); inp.type = 'hidden'; inp.name = k; inp.value = String(payload[k] === undefined ? '' : payload[k]); f.appendChild(inp); });
-          document.body.appendChild(f);
-          f.submit();
-          resultEl.style.display = 'block';
-          resultEl.textContent = '提交失敗（fetch），已改用備援表單提交。若短時間內仍未看到資料，請檢查 Web App 部署設定。';
-          // cleanup after a while
-          setTimeout(function(){ try{ document.body.removeChild(iframe); document.body.removeChild(f); } catch(er){} }, 15000);
-        } catch(fb){
-          resultEl.style.display = 'block';
-          resultEl.textContent = '提交失敗（fetch 和備援皆失敗）：' + (e && e.message ? e.message : String(e));
-        }
+        resultEl.style.display = 'block';
+        resultEl.textContent = '提交失敗：' + (e && e.message ? e.message : String(e));
       } finally {
         submitBtn.disabled = false;
         resultEl.scrollIntoView({ behavior: 'smooth' });
