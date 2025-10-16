@@ -107,15 +107,45 @@
       }, 20000);
 
       // always load student list (independent of LIFF)
-      try{
-        const r = await fetch(EXEC + '?action=getStudentList&_=' + Date.now());
-        const js = await r.json();
-        if (js && js.success && js.data) {
-          var sel = document.getElementById('seatNumber');
-          js.data.sort(function(a,b){ return Number(a.seat) - Number(b.seat); });
-          js.data.forEach(function(it){ var opt = document.createElement('option'); opt.value = it.seat; opt.textContent = it.seat; sel.appendChild(opt); });
+      async function loadStudentList(){
+        var sel = document.getElementById('seatNumber');
+        var status = document.getElementById('seatLoadStatus');
+        try{
+          status.style.display = 'block';
+          status.textContent = '載入座號中...';
+          // add cache-bust
+          const r = await fetch(EXEC + '?action=getStudentList&_=' + Date.now(), { method: 'GET', cache: 'no-store' });
+          if (!r.ok) {
+            var body = '';
+            try { body = await r.text(); } catch(e) { body = '(無法讀取回應)'; }
+            status.innerHTML = '載入座號失敗（HTTP ' + r.status + '）<br/>' + (body.length>200? body.slice(0,200)+'...': body) + '<br/>' + '<button id="retrySeat" style="margin-top:8px;padding:6px">重新載入座號</button>';
+            var rb = document.getElementById('retrySeat'); if (rb) rb.addEventListener('click', loadStudentList);
+            return;
+          }
+          const js = await r.json();
+          // clear existing options except first
+          while (sel.options.length>1) sel.remove(1);
+          if (js && js.success && js.data && js.data.length>0) {
+            // robust sort: numeric if possible, otherwise string
+            js.data.sort(function(a,b){
+              var an = Number(a.seat), bn = Number(b.seat);
+              if (!isNaN(an) && !isNaN(bn)) return an - bn;
+              var as = String(a.seat||''); var bs = String(b.seat||''); return as.localeCompare(bs, 'zh-Hant-u-co-pinyin');
+            });
+            js.data.forEach(function(it){ var opt = document.createElement('option'); opt.value = it.seat; opt.text = String(it.seat); sel.appendChild(opt); });
+            status.style.display = 'none';
+          } else {
+            status.innerHTML = '沒有可用的座號資料。<br/><button id="retrySeat" style="margin-top:8px;padding:6px">重新載入座號</button>';
+            var rb2 = document.getElementById('retrySeat'); if (rb2) rb2.addEventListener('click', loadStudentList);
+          }
+        } catch(e){
+          console.log('getStudentList failed', e);
+          status.innerHTML = '載入座號失敗（網路或伺服器錯誤）。<br/><button id="retrySeat" style="margin-top:8px;padding:6px">重新載入座號</button>';
+          var rb3 = document.getElementById('retrySeat'); if (rb3) rb3.addEventListener('click', loadStudentList);
         }
-      } catch(e){ console.log('getStudentList failed', e); }
+      }
+      // invoke initial load
+      loadStudentList();
 
       // attempt to load LIFF SDK and init
       try{
