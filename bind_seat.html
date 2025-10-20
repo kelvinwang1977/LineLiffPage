@@ -27,7 +27,7 @@
     <form id="seatBindingForm">
   <label for="seatNumber">學生座號</label>
   <select id="seatNumber"><option value="">請選擇座號</option></select>
-  <div id="seatLoadStatus" style="margin-top:8px;font-size:13px;color:#666;display:none"></div>
+  
 
   <!-- 學生姓名由後端根據座號查回，前端不顯示此欄位 -->
 
@@ -163,64 +163,22 @@
         }
       }, 20000);
 
-      // always load student list (independent of LIFF)
-      async function loadStudentList(){
+      // 使用固定座號陣列，不再向後端查表，也不顯示載入狀態
+      (function populateSeatList(){
         var sel = document.getElementById('seatNumber');
-        var status = document.getElementById('seatLoadStatus');
         try{
-          if (!EXEC || EXEC.length === 0) {
-            if (status) { status.style.display = 'block'; status.innerHTML = '未設定後端執行網址（EXEC_URL）。請在 <code>index.html</code> 設定 Apps Script exec URL。'; }
-            return;
-          }
-          if (status) { status.style.display = 'block'; status.textContent = '載入座號中...'; }
-          // add cache-bust
-          const r = await fetch(EXEC + '?action=getStudentList&_=' + Date.now(), { method: 'GET', cache: 'no-store' });
-          if (!r.ok) {
-            var body = '';
-            try { body = await r.text(); } catch(e) { body = '(無法讀取回應)'; }
-            if (status) {
-              status.innerHTML = '載入座號失敗（HTTP ' + r.status + '）<br/>' + (body.length>200? body.slice(0,200)+'...': body) + '<br/>' + '<button id="retrySeat" style="margin-top:8px;padding:6px">重新載入座號</button>' + '<pre style="margin-top:8px;white-space:pre-wrap;color:#333;font-size:12px">' + escapeHtml(body.slice(0,1000)) + '</pre>';
-              var rb = document.getElementById('retrySeat'); if (rb) rb.addEventListener('click', loadStudentList);
-            }
-            return;
-          }
-          var js = null;
-          try { js = await r.json(); } catch(jsonErr) {
-            var txt = '';
-            try { txt = await r.text(); } catch(e) { txt = '(無法讀取回應)'; }
-            if (status) status.innerHTML = '載入座號失敗（回傳非 JSON）<br/>' + '<pre style="white-space:pre-wrap;color:#333;font-size:12px">' + escapeHtml(txt.slice(0,1000)) + '</pre>' + '<br/><button id="retrySeat" style="margin-top:8px;padding:6px">重新載入座號</button>';
-            var rbj = document.getElementById('retrySeat'); if (rbj) rbj.addEventListener('click', loadStudentList);
-            return;
-          }
+          var seats = [
+            '1','2','3','4','5','6','7','8','9','10','11','12','13','14',
+            '21','22','23','24','26','27','28','29','30','31','32','33','34','35','36'
+          ];
           // clear existing options except first
           while (sel.options.length>1) sel.remove(1);
-          if (js && js.success && js.data && js.data.length>0) {
-            // robust sort: numeric if possible, otherwise string
-            js.data.sort(function(a,b){
-              var an = Number(a.seat), bn = Number(b.seat);
-              if (!isNaN(an) && !isNaN(bn)) return an - bn;
-              var as = String(a.seat||''); var bs = String(b.seat||''); return as.localeCompare(bs, 'zh-Hant-u-co-pinyin');
-            });
-            js.data.forEach(function(it){ var opt = document.createElement('option'); opt.value = it.seat; opt.text = String(it.seat); sel.appendChild(opt); });
-            // ensure select visible and enabled
-            sel.style.display = ''; sel.disabled = false; sel.options[0].text = '請選擇座號';
-            if (status) { status.textContent = '已載入 ' + js.data.length + ' 個座號'; setTimeout(function(){ if (status) status.style.display='none'; }, 1200); }
-          } else {
-            if (status) {
-              status.innerHTML = '沒有可用的座號資料。<br/><button id="retrySeat" style="margin-top:8px;padding:6px">重新載入座號</button>';
-              var rb2 = document.getElementById('retrySeat'); if (rb2) rb2.addEventListener('click', loadStudentList);
-            }
-          }
+          seats.forEach(function(s){ var opt = document.createElement('option'); opt.value = s; opt.text = s; sel.appendChild(opt); });
+          sel.style.display = ''; sel.disabled = false; sel.options[0].text = '請選擇座號';
         } catch(e){
-          console.log('getStudentList failed', e);
-          if (status) {
-            status.innerHTML = '載入座號失敗（網路或伺服器錯誤）：' + escapeHtml(String(e && e.message ? e.message : e)) + '<br/><button id="retrySeat" style="margin-top:8px;padding:6px">重新載入座號</button>';
-            var rb3 = document.getElementById('retrySeat'); if (rb3) rb3.addEventListener('click', loadStudentList);
-          }
+          console.log('populateSeatList error', e);
         }
-      }
-      // invoke initial load
-      loadStudentList();
+      })();
 
       // attempt to load LIFF SDK and init
       try{
