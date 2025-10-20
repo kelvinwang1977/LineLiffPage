@@ -122,7 +122,26 @@
             var resEl = document.getElementById('result');
             if (resEl) { resEl.style.display = 'block'; resEl.textContent = '提交完成（伺服器可能已處理） — 若需確認請檢查後端試算表或 incoming_api_log'; }
             var sb = document.getElementById('submitBtn'); if (sb) sb.disabled = false;
-          } catch(e){}
+
+            // 嘗試在 LIFF 內自動關閉頁面；若不可用則嘗試 window.close()，最後保留目前行為（短暫顯示提示）
+            try {
+              if (window.liff && typeof window.liff.closeWindow === 'function') {
+                // close LIFF view
+                window.liff.closeWindow();
+                return; // 不進行後續清理，LIFF 會關閉視窗
+              }
+            } catch (closeErr) {
+              console.log('liff.closeWindow error', closeErr);
+            }
+
+            // 嘗試關閉一般瀏覽器標籤頁（部分瀏覽器可能會被阻擋）
+            try {
+              window.close();
+            } catch (wcErr) {
+              console.log('window.close failed', wcErr);
+            }
+
+          } catch(e){console.log(e);} 
           setTimeout(function(){ try{ iframe.parentNode.removeChild(iframe); form.parentNode.removeChild(form);}catch(e){} }, 1200);
         };
 
