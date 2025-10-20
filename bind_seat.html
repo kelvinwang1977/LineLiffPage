@@ -120,7 +120,7 @@
         iframe.onload = function(){
           try{
             var resEl = document.getElementById('result');
-            if (resEl) { resEl.style.display = 'block'; resEl.textContent = '提交完成（伺服器可能已處理） — 若需確認請檢查後端試算表或 incoming_api_log'; }
+            if (resEl) { resEl.style.display = 'block'; resEl.textContent = '已成功送出，感謝您的回報。'; }
             var sb = document.getElementById('submitBtn'); if (sb) sb.disabled = false;
 
             // 嘗試在 LIFF 內自動關閉頁面；若不可用則嘗試 window.close()，最後保留目前行為（短暫顯示提示）
