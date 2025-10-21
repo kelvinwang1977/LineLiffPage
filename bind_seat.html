@@ -128,22 +128,38 @@
             try {
               if (window.liff && typeof window.liff.sendMessages === 'function' && liff.isInClient && liff.isInClient()) {
                 try {
-                  // build Flex message contents
-                  var bodyContents = [];
-                  if (payload.seat) bodyContents.push({ type: 'text', text: '座號: ' + payload.seat, size: 'sm', wrap: true });
-                  if (payload.studentName) bodyContents.push({ type: 'text', text: '學生: ' + payload.studentName, size: 'sm', wrap: true });
-                  if (payload.parentName) bodyContents.push({ type: 'text', text: '家長: ' + payload.parentName, size: 'sm', wrap: true });
-                  if (payload.parentPhone) bodyContents.push({ type: 'text', text: '手機: ' + payload.parentPhone, size: 'sm', wrap: true });
-                  if (payload.relation) bodyContents.push({ type: 'text', text: '關係: ' + payload.relation, size: 'sm', wrap: true });
-
+                  // build a nicer, easy-to-read Flex bubble with labeled rows and friendly emoji
                   var flexContents = {
                     type: 'bubble',
-                    header: { type: 'box', layout: 'vertical', contents: [ { type: 'text', text: '綁定完成', weight: 'bold', size: 'md' } ] },
-                    body: { type: 'box', layout: 'vertical', spacing: 'sm', contents: bodyContents.length? bodyContents : [ { type: 'text', text: '綁定資料已儲存', size: 'sm' } ] },
-                    footer: { type: 'box', layout: 'vertical', contents: [ { type: 'text', text: '感謝您的回報', size: 'xs', color: '#888888' } ] }
+                    header: {
+                      type: 'box',
+                      layout: 'vertical',
+                      contents: [
+                        { type: 'text', text: '🎉 您的聯絡資料已登記', weight: 'bold', size: 'lg', color: '#006400' }
+                      ]
+                    },
+                    body: {
+                      type: 'box',
+                      layout: 'vertical',
+                      spacing: 'sm',
+                      contents: [
+                        { type: 'box', layout: 'baseline', spacing: 'sm', contents: [ { type: 'text', text: '座號', color: '#111111', size: 'sm', weight: 'bold', flex: 2 }, { type: 'text', text: escapeHtml(payload.seat || '-'), color: '#333333', size: 'sm', align: 'end', flex: 3 } ] },
+                        { type: 'box', layout: 'baseline', spacing: 'sm', contents: [ { type: 'text', text: '學生', color: '#111111', size: 'sm', weight: 'bold', flex: 2 }, { type: 'text', text: escapeHtml(payload.studentName || '-'), color: '#333333', size: 'sm', align: 'end', flex: 3 } ] },
+                        { type: 'box', layout: 'baseline', spacing: 'sm', contents: [ { type: 'text', text: '家長', color: '#111111', size: 'sm', weight: 'bold', flex: 2 }, { type: 'text', text: escapeHtml(payload.parentName || '-'), color: '#333333', size: 'sm', align: 'end', flex: 3 } ] },
+                        { type: 'box', layout: 'baseline', spacing: 'sm', contents: [ { type: 'text', text: '手機', color: '#111111', size: 'sm', weight: 'bold', flex: 2 }, { type: 'text', text: escapeHtml(payload.parentPhone || '-'), color: '#333333', size: 'sm', align: 'end', flex: 3 } ] },
+                        { type: 'box', layout: 'baseline', spacing: 'sm', contents: [ { type: 'text', text: '關係', color: '#111111', size: 'sm', weight: 'bold', flex: 2 }, { type: 'text', text: escapeHtml(payload.relation || '-'), color: '#333333', size: 'sm', align: 'end', flex: 3 } ] }
+                      ]
+                    },
+                    footer: {
+                      type: 'box',
+                      layout: 'vertical',
+                      contents: [
+                        { type: 'text', text: '感謝您的回報 🙏 若需修改請再回來告訴我們。', size: 'xs', color: '#888888', wrap: true }
+                      ]
+                    }
                   };
 
-                  await liff.sendMessages([ { type: 'flex', altText: '綁定完成', contents: flexContents } ]);
+                  await liff.sendMessages([ { type: 'flex', altText: '您的聯絡資料已登記', contents: flexContents } ]);
                   // close LIFF view after sending
                   if (typeof liff.closeWindow === 'function') { liff.closeWindow(); return; }
                 } catch(sendErr) {
