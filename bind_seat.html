@@ -117,21 +117,35 @@
         });
         document.body.appendChild(form);
 
-        iframe.onload = function(){
+        // when iframe finishes loading (server responded), show result and attempt to send a LIFF message
+        iframe.onload = async function(){
           try{
             var resEl = document.getElementById('result');
             if (resEl) { resEl.style.display = 'block'; resEl.textContent = '已成功送出，感謝您的回報。'; }
             var sb = document.getElementById('submitBtn'); if (sb) sb.disabled = false;
 
-            // 嘗試在 LIFF 內自動關閉頁面；若不可用則嘗試 window.close()，最後保留目前行為（短暫顯示提示）
+            // 如果在 LIFF 內，嘗試用 liff.sendMessages() 發送綁定完成訊息（包含學生姓名與表單欄位），再關閉 LIFF
             try {
-              if (window.liff && typeof window.liff.closeWindow === 'function') {
-                // close LIFF view
-                window.liff.closeWindow();
-                return; // 不進行後續清理，LIFF 會關閉視窗
+              if (window.liff && typeof window.liff.sendMessages === 'function' && liff.isInClient && liff.isInClient()) {
+                try {
+                  var textParts = [];
+                  if (payload.seat) textParts.push('座號: ' + payload.seat);
+                  if (payload.studentName) textParts.push('學生: ' + payload.studentName);
+                  if (payload.parentName) textParts.push('家長: ' + payload.parentName);
+                  if (payload.parentPhone) textParts.push('手機: ' + payload.parentPhone);
+                  var messageText = '綁定完成 — ' + textParts.join('；');
+                  await liff.sendMessages([{ type: 'text', text: messageText }]);
+                  // close LIFF view after sending
+                  if (typeof liff.closeWindow === 'function') {
+                    liff.closeWindow();
+                    return; // LIFF will close, skip cleanup
+                  }
+                } catch(sendErr) {
+                  console.log('liff.sendMessages error', sendErr);
+                }
               }
             } catch (closeErr) {
-              console.log('liff.closeWindow error', closeErr);
+              console.log('liff send/close error', closeErr);
             }
 
             // 嘗試關閉一般瀏覽器標籤頁（部分瀏覽器可能會被阻擋）
@@ -234,8 +248,22 @@
           console.log('Ping failed: status=', pingResp.status, 'body=', txt);
           return;
         }
-        // optionally parse to ensure JSON
-        try { await pingResp.clone().json(); } catch(e) {
+        // parse student list JSON so we can include studentName in the payload
+        var studentNameFromServer = '';
+        try {
+          var listJson = await pingResp.clone().json();
+          // API returns {success:true, data: [...] }
+          var arr = (listJson && listJson.data) ? listJson.data : (Array.isArray(listJson) ? listJson : []);
+          if (Array.isArray(arr)) {
+            for (var i=0;i<arr.length;i++){
+              var r = arr[i];
+              // r may be object {seat, name} or array; handle both
+              var s = r && (r.seat || (r[0]||''));
+              var n = r && (r.name || (r[1]||''));
+              if (String(s) === String(seatNumber)) { studentNameFromServer = n || ''; break; }
+            }
+          }
+        } catch(e) {
           var txt2 = '';
           try { txt2 = await pingResp.clone().text(); } catch(er) { txt2 = '(無法讀取回應內文)'; }
           resultEl.textContent = '伺服器回傳非 JSON，無法送出\n' + txt2;
@@ -258,6 +286,7 @@
         seatNumber: seatNumber,
         seat: seatNumber,
         parentName: parentName,
+        studentName: (typeof studentNameFromServer !== 'undefined' ? studentNameFromServer : ''),
         parentEmail: document.getElementById('parentEmail').value,
         parentPhone: document.getElementById('parentPhone').value,
         relation: document.getElementById('relation')?document.getElementById('relation').value:'',
