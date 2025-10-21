@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>緊急聯絡資料表</title>
+  <style>
+    body { font-family: 'Microsoft JhengHei',sans-serif; max-width:600px; margin:0 auto; padding:16px; background:#f5f5f5 }
+    .container { background:#fff; padding:18px; border-radius:8px }
+    .welcome { background:#e4faf4; border:1px solid #787b77; padding:10px; border-radius:6px; color:#008062; margin-bottom:12px }
+    label { display:block; margin-top:12px; font-weight:600 }
+    input, select, button { width:100%; padding:10px; box-sizing:border-box }
+    button { margin-top:12px; background:#008062; color:#fff; border:0; padding:12px; border-radius:6px }
+  </style>
+  <!-- 配置：把下面的 EXEC_URL 改成你的 Apps Script exec URL，例如 https://script.google.com/macros/s/AKfy.../exec -->
+  <script>
+    // IMPORTANT: replace with your deployed Apps Script exec URL during deployment.
+    // Do NOT commit the real exec URL to a public repository. Example: 'https://script.google.com/macros/s/AKfy.../exec'
+    const EXEC_URL = 'REPLACE_WITH_YOUR_EXEC_URL';
+  </script>
+</head>
+<body>
+    <div class="container">
+  <div class="welcome" id="pageInfo">嗨，朋友（ID: N/A） ，請提供家聯絡資料！
+      <div style="margin-top:6px; color:#666; font-size:13px">請選擇學生座號，填寫家長資料後送出。</div>
+  </div>
+  <pre id="debugProfile" style="display:none;visibility:hidden;height:0;margin:0;padding:0;overflow:hidden"></pre>
+
+    <form id="seatBindingForm">
+  <label for="seatNumber">學生座號</label>
+  <select id="seatNumber"><option value="">請選擇座號</option></select>
+  
+
+  <!-- 學生姓名由後端根據座號查回，前端不顯示此欄位 -->
+
+        <label for="parentName">家長姓名</label>
+        <input id="parentName" />
+
+        <label for="parentEmail">家長email</label>
+        <input id="parentEmail" />
+
+        <label for="parentPhone">家長手機</label>
+        <input id="parentPhone" />
+
+        <label for="relation">關係</label>
+        <select id="relation">
+          <option value="">請選擇關係</option>
+          <option value="父親">父親</option>
+          <option value="母親">母親</option>
+          <option value="監護人">監護人</option>
+          <option value="阿公/阿嬤">阿公/阿嬤</option>
+          <option value="其他">其他</option>
+        </select>
+
+        <div style="margin-top:12px"><button id="submitBtn" type="button">送出綁定</button></div>
+        <div id="result" style="margin-top:12px; padding:10px; border-radius:6px; display:none;
+          background:#f0f8f4; color:#064; border:1px solid #cfe9df"></div>
+      </form>
+
+      
+  </div>
+
+  <script>
+  (function(){
+    const VERSION_URL = './version.txt';
+    const LIFF_ID = '2008280587-XzrRkkO4';
+    const EXEC = typeof EXEC_URL !== 'undefined' ? EXEC_URL : '';
+
+    // insert update banner
+    var banner = document.createElement('div');
+    banner.id = 'updateBanner';
+    banner.style.cssText = 'display:none;position:fixed;left:0;right:0;top:0;z-index:9999;padding:10px;background:#fffbe6;border-bottom:1px solid #ffd966;text-align:center';
+    banner.innerHTML = '偵測到新版本可用，請 <button id="reloadBtn" style="margin-left:8px;padding:6px 8px;border-radius:4px">重新整理</button>';
+    document.body.insertBefore(banner, document.body.firstChild);
+    document.addEventListener('click', function(e){ if(e.target && e.target.id==='reloadBtn'){ location.reload(true); } });
+
+    async function fetchVersion(){
+      try{
+        const res = await fetch(VERSION_URL + '?_=' + Date.now(), {cache: 'no-store'});
+        if (!res.ok) return null;
+        return (await res.text()).trim();
+      } catch(e){ return null; }
+    }
+
+    // dynamic load LIFF SDK with cache-busting
+    function loadLiffSdk(ver){
+      return new Promise(function(resolve,reject){
+        if (window.liff) return resolve();
+        var s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js' + (ver ? '?cb=' + encodeURIComponent(ver) : '?_=' + Date.now());
+        s.onload = function(){ resolve(); };
+        s.onerror = function(){ reject(new Error('LIFF SDK load failed')); };
+        document.head.appendChild(s);
+      });
+    }
+
+    // small helper to escape HTML when rendering server responses for diagnostics
+    function escapeHtml(s){
+      if (!s) return '';
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    // submit via hidden form + iframe to work around fetch CORS issues in some in-app browsers
+    function submitViaForm(payload){
+      try{
+        // cleanup previous
+        var existing = document.getElementById('post_target_iframe');
+        if (existing) existing.parentNode.removeChild(existing);
+
+        var iframe = document.createElement('iframe');
+        iframe.name = 'post_target'; iframe.id = 'post_target_iframe'; iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+
+        var form = document.createElement('form');
+        form.method = 'POST'; form.action = EXEC; form.target = iframe.name; form.style.display = 'none';
+        Object.keys(payload).forEach(function(k){
+          var inp = document.createElement('input'); inp.type='hidden'; inp.name = k; inp.value = String(payload[k] === undefined ? '' : payload[k]); form.appendChild(inp);
+        });
+        document.body.appendChild(form);
+
+        // when iframe finishes loading (server responded), show result and attempt to send a LIFF message
+        iframe.onload = async function(){
+          try{
+            var resEl = document.getElementById('result');
+            if (resEl) { resEl.style.display = 'block'; resEl.textContent = '已成功送出，感謝您的回報。'; }
+            var sb = document.getElementById('submitBtn'); if (sb) sb.disabled = false;
+
+            // 如果在 LIFF 內，嘗試用 liff.sendMessages() 發送綁定完成訊息（包含學生姓名與表單欄位），再關閉 LIFF
+            try {
+              if (window.liff && typeof window.liff.sendMessages === 'function' && liff.isInClient && liff.isInClient()) {
+                try {
+                  // build Flex message contents
+                  var bodyContents = [];
+                  if (payload.seat) bodyContents.push({ type: 'text', text: '座號: ' + payload.seat, size: 'sm', wrap: true });
+                  if (payload.studentName) bodyContents.push({ type: 'text', text: '學生: ' + payload.studentName, size: 'sm', wrap: true });
+                  if (payload.parentName) bodyContents.push({ type: 'text', text: '家長: ' + payload.parentName, size: 'sm', wrap: true });
+                  if (payload.parentPhone) bodyContents.push({ type: 'text', text: '手機: ' + payload.parentPhone, size: 'sm', wrap: true });
+                  if (payload.relation) bodyContents.push({ type: 'text', text: '關係: ' + payload.relation, size: 'sm', wrap: true });
+
+                  var flexContents = {
+                    type: 'bubble',
+                    header: { type: 'box', layout: 'vertical', contents: [ { type: 'text', text: '綁定完成', weight: 'bold', size: 'md' } ] },
+                    body: { type: 'box', layout: 'vertical', spacing: 'sm', contents: bodyContents.length? bodyContents : [ { type: 'text', text: '綁定資料已儲存', size: 'sm' } ] },
+                    footer: { type: 'box', layout: 'vertical', contents: [ { type: 'text', text: '感謝您的回報', size: 'xs', color: '#888888' } ] }
+                  };
+
+                  await liff.sendMessages([ { type: 'flex', altText: '綁定完成', contents: flexContents } ]);
+                  // close LIFF view after sending
+                  if (typeof liff.closeWindow === 'function') { liff.closeWindow(); return; }
+                } catch(sendErr) {
+                  console.log('liff.sendMessages (flex) error', sendErr);
+                }
+              }
+            } catch (closeErr) {
+              console.log('liff send/close error', closeErr);
+            }
+
+            // 嘗試關閉一般瀏覽器標籤頁（部分瀏覽器可能會被阻擋）
+            try {
+              window.close();
+            } catch (wcErr) {
+              console.log('window.close failed', wcErr);
+            }
+
+          } catch(e){console.log(e);} 
+          setTimeout(function(){ try{ iframe.parentNode.removeChild(iframe); form.parentNode.removeChild(form);}catch(e){} }, 1200);
+        };
+
+        // submit
+        form.submit();
+      } catch(err){ console.log('submitViaForm error', err); var sb2 = document.getElementById('submitBtn'); if (sb2) sb2.disabled = false; }
+    }
+
+    (async function main(){
+      const currentVer = await fetchVersion();
+      try { if (currentVer) localStorage.setItem('app_build_version', currentVer); } catch(e){}
+
+      // poll for version changes every 20s
+      setInterval(async function(){
+        const v = await fetchVersion();
+        const stored = localStorage.getItem('app_build_version') || '';
+        if (v && stored && v !== stored) {
+          document.getElementById('updateBanner').style.display = 'block';
+        }
+      }, 20000);
+
+      // 使用固定座號陣列，不再向後端查表，也不顯示載入狀態
+      (function populateSeatList(){
+        var sel = document.getElementById('seatNumber');
+        try{
+          var seats = [
+            '1','2','3','4','5','6','7','8','9','10','11','12','13','14',
+            '21','22','23','24','26','27','28','29','30','31','32','33','34','35','36'
+          ];
+          // clear existing options except first
+          while (sel.options.length>1) sel.remove(1);
+          seats.forEach(function(s){ var opt = document.createElement('option'); opt.value = s; opt.text = s; sel.appendChild(opt); });
+          sel.style.display = ''; sel.disabled = false; sel.options[0].text = '請選擇座號';
+        } catch(e){
+          console.log('populateSeatList error', e);
+        }
+      })();
+
+      // attempt to load LIFF SDK and init
+      try{
+        await loadLiffSdk(currentVer || Date.now());
+        if (window.liff) {
+          try{
+            await liff.init({ liffId: LIFF_ID });
+          } catch(e){ console.log('liff.init error', e); }
+
+          var inClient = liff.isInClient()?true:false;
+          var loggedIn = liff.isLoggedIn()?true:false;
+
+          if (inClient || loggedIn) {
+            try{
+              var profile = await liff.getProfile();
+              // do not display full profile JSON or userId on the page for privacy
+              // keep debugProfile hidden; still send a minimal server log
+              // send to server log (fire and forget)
+              fetch(EXEC, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action:'logLiffInit', gotProfile:true, profile:profile, clientTs:Date.now() }) }).catch(function(e){});
+              // populate fields
+              var u = document.createElement('input'); u.type='hidden'; u.id='liffUserId'; u.value=profile.userId; document.getElementById('seatBindingForm').appendChild(u);
+              var n = document.createElement('input'); n.type='hidden'; n.id='liffDisplayName'; n.value=profile.displayName; document.getElementById('seatBindingForm').appendChild(n);
+              // show only displayName (no userId)
+              document.getElementById('pageInfo').innerHTML = '嗨，' + (profile.displayName||'朋友') + '，歡迎來到座號綁定頁面！' + '<div style="margin-top:6px; color:#666; font-size:13px">請選擇學生座號，系統會自動帶出學生姓名；填寫家長資料後送出即可完成綁定。</div>';
+            } catch(err){
+              // keep profile errors hidden from UI; log to server for debugging
+              var dbg = document.getElementById('debugProfile'); dbg.style.visibility='hidden'; dbg.textContent = 'liff.getProfile error:\n' + (err && err.message ? err.message : String(err));
+              fetch(EXEC, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action:'logLiffInit', getProfileError: (err && err.message) ? err.message : String(err), clientTs:Date.now() }) }).catch(function(e){});
+            }
+          }
+        }
+      } catch(err){ console.log('liff load/init error', err); }
+
+    })();
+
+    // submit handler with pre-submit ping to server
+    document.getElementById('submitBtn').addEventListener('click', async function(){
+      var submitBtn = document.getElementById('submitBtn');
+      var seatNumber = document.getElementById('seatNumber').value;
+      var parentName = document.getElementById('parentName').value;
+      var resultEl = document.getElementById('result');
+      if (!seatNumber) { alert('請先選擇學生座號'); return; }
+      if (!parentName) { alert('請輸入家長姓名'); return; }
+
+      // ping server with a quick GET to ensure endpoint reachable before POST
+      try{
+        resultEl.style.display = 'block'; resultEl.textContent = '檢查伺服器連線中...';
+        const pingResp = await fetch(EXEC + '?action=getStudentList&_=' + Date.now(), { method:'GET', cache:'no-store' });
+        if (!pingResp.ok) {
+          var txt = '';
+          try { txt = await pingResp.text(); } catch(e) { txt = '(無法讀取回應內文)'; }
+          resultEl.textContent = '伺服器回應異常，無法送出（HTTP ' + pingResp.status + '）\n' + txt;
+          console.log('Ping failed: status=', pingResp.status, 'body=', txt);
+          return;
+        }
+        // parse student list JSON so we can include studentName in the payload
+        var studentNameFromServer = '';
+        try {
+          var listJson = await pingResp.clone().json();
+          // API returns {success:true, data: [...] }
+          var arr = (listJson && listJson.data) ? listJson.data : (Array.isArray(listJson) ? listJson : []);
+          if (Array.isArray(arr)) {
+            for (var i=0;i<arr.length;i++){
+              var r = arr[i];
+              // r may be object {seat, name} or array; handle both
+              var s = r && (r.seat || (r[0]||''));
+              var n = r && (r.name || (r[1]||''));
+              if (String(s) === String(seatNumber)) { studentNameFromServer = n || ''; break; }
+            }
+          }
+        } catch(e) {
+          var txt2 = '';
+          try { txt2 = await pingResp.clone().text(); } catch(er) { txt2 = '(無法讀取回應內文)'; }
+          resultEl.textContent = '伺服器回傳非 JSON，無法送出\n' + txt2;
+          console.log('Ping returned non-JSON body:', txt2);
+          return;
+        }
+      } catch(pingErr) {
+        resultEl.style.display = 'block'; resultEl.textContent = '無法連線到後端：' + (pingErr && pingErr.message ? pingErr.message : String(pingErr));
+        console.log('Ping exception:', pingErr);
+        return;
+      }
+
+      var liffUserIdEl = document.getElementById('liffUserId');
+      var liffDisplayNameEl = document.getElementById('liffDisplayName');
+      var liffUserId = liffUserIdEl ? liffUserIdEl.value : '';
+      var liffDisplayName = liffDisplayNameEl ? liffDisplayNameEl.value : '';
+
+      var payload = {
+        action: 'submitSeatBinding',
+        seatNumber: seatNumber,
+        seat: seatNumber,
+        parentName: parentName,
+        studentName: (typeof studentNameFromServer !== 'undefined' ? studentNameFromServer : ''),
+        parentEmail: document.getElementById('parentEmail').value,
+        parentPhone: document.getElementById('parentPhone').value,
+        relation: document.getElementById('relation')?document.getElementById('relation').value:'',
+        liffUserId: liffUserId,
+        liffDisplayName: liffDisplayName,
+        fromLiff: !!liffUserId
+      };
+
+      // disable button to prevent double submit
+      submitBtn.disabled = true;
+      resultEl.style.display = 'none';
+
+      // submit via hidden form + iframe to avoid fetch CORS issues in some in-app browsers
+      try {
+        submitViaForm(payload);
+      } catch(e) {
+        resultEl.style.display = 'block';
+        resultEl.textContent = '提交失敗（本地提交錯誤）：' + (e && e.message ? e.message : String(e));
+        console.log('submitViaForm exception:', e);
+        submitBtn.disabled = false;
+      }
+    });
+
+    
+
+  })();
+  </script>
+</body>
+</html>
