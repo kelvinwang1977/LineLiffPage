@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>綁定座位</title>
+  <style>
+    body { font-family: 'Microsoft JhengHei',sans-serif; max-width:600px; margin:0 auto; padding:16px; background:#f5f5f5 }
+    .container { background:#fff; padding:18px; border-radius:8px }
+  </style>
+  <!-- 配置：把下面的 EXEC_URL 改成你的 Apps Script exec URL，例如 https://script.google.com/macros/s/AKfy.../exec -->
+  <script>
+    // IMPORTANT: replace with your deployed Apps Script exec URL during deployment.
+    // Do NOT commit the real exec URL to a public repository. Example: 'https://script.google.com/macros/s/AKfy.../exec'
+    const EXEC_URL = 'REPLACE_WITH_YOUR_EXEC_URL';
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1>座位綁定</h1>
+    <form id="seatBindingForm">
+      <label for="seatNumber">學生座號</label>
+      <select id="seatNumber"><option value="">請選擇座號</option></select>
+      <label for="parentName">家長姓名</label>
+      <input id="parentName" />
+      <div style="margin-top:12px"><button id="submitBtn" type="button">送出綁定</button></div>
+      <div id="result" style="margin-top:12px; padding:10px; border-radius:6px; display:none;
+        background:#f0f8f4; color:#064; border:1px solid #cfe9df"></div>
+    </form>
+  </div>
+  <script>
+  (function(){
+    const LIFF_ID = '2008280587-XzrRkkO4';
+    const EXEC = typeof EXEC_URL !== 'undefined' ? EXEC_URL : '';
+    // simplified submit for site copy
+    document.getElementById('submitBtn').addEventListener('click', function(){
+      alert('測試表單送出，EXEC=' + EXEC);
+    });
+  })();
+  </script>
+</body>
+</html>
