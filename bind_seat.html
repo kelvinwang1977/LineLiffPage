@@ -128,20 +128,26 @@
             try {
               if (window.liff && typeof window.liff.sendMessages === 'function' && liff.isInClient && liff.isInClient()) {
                 try {
-                  var textParts = [];
-                  if (payload.seat) textParts.push('座號: ' + payload.seat);
-                  if (payload.studentName) textParts.push('學生: ' + payload.studentName);
-                  if (payload.parentName) textParts.push('家長: ' + payload.parentName);
-                  if (payload.parentPhone) textParts.push('手機: ' + payload.parentPhone);
-                  var messageText = '綁定完成 — ' + textParts.join('；');
-                  await liff.sendMessages([{ type: 'text', text: messageText }]);
+                  // build Flex message contents
+                  var bodyContents = [];
+                  if (payload.seat) bodyContents.push({ type: 'text', text: '座號: ' + payload.seat, size: 'sm', wrap: true });
+                  if (payload.studentName) bodyContents.push({ type: 'text', text: '學生: ' + payload.studentName, size: 'sm', wrap: true });
+                  if (payload.parentName) bodyContents.push({ type: 'text', text: '家長: ' + payload.parentName, size: 'sm', wrap: true });
+                  if (payload.parentPhone) bodyContents.push({ type: 'text', text: '手機: ' + payload.parentPhone, size: 'sm', wrap: true });
+                  if (payload.relation) bodyContents.push({ type: 'text', text: '關係: ' + payload.relation, size: 'sm', wrap: true });
+
+                  var flexContents = {
+                    type: 'bubble',
+                    header: { type: 'box', layout: 'vertical', contents: [ { type: 'text', text: '綁定完成', weight: 'bold', size: 'md' } ] },
+                    body: { type: 'box', layout: 'vertical', spacing: 'sm', contents: bodyContents.length? bodyContents : [ { type: 'text', text: '綁定資料已儲存', size: 'sm' } ] },
+                    footer: { type: 'box', layout: 'vertical', contents: [ { type: 'text', text: '感謝您的回報', size: 'xs', color: '#888888' } ] }
+                  };
+
+                  await liff.sendMessages([ { type: 'flex', altText: '綁定完成', contents: flexContents } ]);
                   // close LIFF view after sending
-                  if (typeof liff.closeWindow === 'function') {
-                    liff.closeWindow();
-                    return; // LIFF will close, skip cleanup
-                  }
+                  if (typeof liff.closeWindow === 'function') { liff.closeWindow(); return; }
                 } catch(sendErr) {
-                  console.log('liff.sendMessages error', sendErr);
+                  console.log('liff.sendMessages (flex) error', sendErr);
                 }
               }
             } catch (closeErr) {
